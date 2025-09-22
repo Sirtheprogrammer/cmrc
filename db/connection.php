@@ -12,9 +12,8 @@ try {
         PDO::ATTR_EMULATE_PREPARES => false,
     ]);
 } catch (PDOException $e) {
-    http_response_code(500);
-    echo "Database connection failed: " . htmlspecialchars($e->getMessage());
-    exit;
+    // throw so caller can handle and present friendly error
+    throw new RuntimeException('Database connection failed: ' . $e->getMessage());
 }
 
 // helper to prepare and execute with params and return stmt

@@ -23,20 +23,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $gb = (float)($_POST['gb_amount'] ?? 0);
     $price = (float)($_POST['price'] ?? 0);
     $desc = trim($_POST['description'] ?? '');
+    $network = $_POST['network'] ?? '';
     $allow_custom = isset($_POST['allow_custom_gb']) ? 1 : 0;
 
     if ($name === '') $errors[] = 'Name required.';
     if ($gb <= 0) $errors[] = 'GB must be positive.';
     if ($price <= 0) $errors[] = 'Price must be positive.';
 
+    if ($network === '') $errors[] = 'Network required.';
+
     if (empty($errors)) {
         if ($action === 'create') {
-            $stmt = $pdo->prepare('INSERT INTO packages (name,duration,gb_amount,price,description,allow_custom_gb,created_at) VALUES (?, ?, ?, ?, ?, ?, NOW())');
-            $stmt->execute([$name, $duration, $gb, $price, $desc, $allow_custom]);
+            $stmt = $pdo->prepare('INSERT INTO packages (name,duration,gb_amount,price,description,network,allow_custom_gb,created_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())');
+            $stmt->execute([$name, $duration, $gb, $price, $desc, $network, $allow_custom]);
         } elseif ($action === 'edit') {
             $id = (int)($_POST['id'] ?? 0);
-            $stmt = $pdo->prepare('UPDATE packages SET name=?, duration=?, gb_amount=?, price=?, description=?, allow_custom_gb=? WHERE id = ?');
-            $stmt->execute([$name, $duration, $gb, $price, $desc, $allow_custom, $id]);
+            $stmt = $pdo->prepare('UPDATE packages SET name=?, duration=?, gb_amount=?, price=?, description=?, network=?, allow_custom_gb=? WHERE id = ?');
+            $stmt->execute([$name, $duration, $gb, $price, $desc, $network, $allow_custom, $id]);
         }
         header('Location: packages.php'); exit;
     }
@@ -79,6 +82,7 @@ $rows = $pdo->query('SELECT * FROM packages ORDER BY price ASC')->fetchAll();
             <input type="hidden" name="action" value="create">
             <div class="mb-2"><input name="name" class="form-control" placeholder="Name"></div>
             <div class="mb-2"><select name="duration" class="form-select"><option value="3_weeks">3 weeks</option><option value="1_month">1 month</option><option value="6_months">6 months</option><option value="12_months">12 months</option><option value="custom">Custom</option></select></div>
+            <div class="mb-2"><select name="network" class="form-select" required><option value="">Select Network</option><option value="tigo">Tigo</option><option value="vodacom">Vodacom</option><option value="halotel">Halotel</option><option value="airtel">Airtel</option></select></div>
             <div class="mb-2"><input name="gb_amount" class="form-control" placeholder="GB amount"></div>
             <div class="mb-2"><input name="price" class="form-control" placeholder="Price"></div>
             <div class="mb-2"><textarea name="description" class="form-control" placeholder="Description"></textarea></div>
@@ -99,7 +103,7 @@ $rows = $pdo->query('SELECT * FROM packages ORDER BY price ASC')->fetchAll();
                 <div class="d-flex justify-content-between align-items-start">
                   <div>
                     <strong><?php echo htmlspecialchars($r['name']); ?></strong>
-                    <div class="small-muted"><?php echo htmlspecialchars($r['gb_amount']); ?> GB • Tsh <?php echo number_format($r['price'],0); ?></div>
+                    <div class="small-muted"><?php echo htmlspecialchars($r['gb_amount']); ?> GB • <?php echo ucfirst(htmlspecialchars($r['network'])); ?> • Tsh <?php echo number_format($r['price'],0); ?></div>
                   </div>
                   <div>
                     <button class="btn btn-sm btn-outline-secondary" onclick="populateEdit(<?php echo htmlspecialchars(json_encode($r), ENT_QUOTES, 'UTF-8'); ?>)">Edit</button>
@@ -124,6 +128,7 @@ $rows = $pdo->query('SELECT * FROM packages ORDER BY price ASC')->fetchAll();
               <input type="hidden" name="id" id="edit_id">
               <div class="mb-2"><input name="name" id="edit_name" class="form-control" placeholder="Name"></div>
               <div class="mb-2"><select name="duration" id="edit_duration" class="form-select"><option value="3_weeks">3 weeks</option><option value="1_month">1 month</option><option value="6_months">6 months</option><option value="12_months">12 months</option><option value="custom">Custom</option></select></div>
+              <div class="mb-2"><select name="network" id="edit_network" class="form-select" required><option value="">Select Network</option><option value="tigo">Tigo</option><option value="vodacom">Vodacom</option><option value="halotel">Halotel</option><option value="airtel">Airtel</option></select></div>
               <div class="mb-2"><input name="gb_amount" id="edit_gb" class="form-control" placeholder="GB amount"></div>
               <div class="mb-2"><input name="price" id="edit_price" class="form-control" placeholder="Price"></div>
               <div class="mb-2"><textarea name="description" id="edit_description" class="form-control" placeholder="Description"></textarea></div>
@@ -147,6 +152,7 @@ $rows = $pdo->query('SELECT * FROM packages ORDER BY price ASC')->fetchAll();
     document.getElementById('edit_gb').value = data.gb_amount;
     document.getElementById('edit_price').value = data.price;
     document.getElementById('edit_description').value = data.description;
+    document.getElementById('edit_network').value = data.network;
     document.getElementById('edit_allow').checked = data.allow_custom_gb == 1;
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }

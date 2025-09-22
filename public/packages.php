@@ -244,7 +244,11 @@ $packages = $pdo->query('SELECT * FROM packages ORDER BY price ASC')->fetchAll()
           <div class="package-header">
             <h5 class="card-title mb-2"><?php echo htmlspecialchars($pkg['name']); ?></h5>
             <div class="package-price">Tsh <?php echo number_format($pkg['price'],0); ?></div>
-            <div class="text-muted small"><?php echo htmlspecialchars($pkg['duration']); ?> • <?php echo htmlspecialchars($pkg['gb_amount']); ?> GB</div>
+            <div class="text-muted small">
+              <?php echo ucfirst(htmlspecialchars($pkg['network'])); ?> • 
+              <?php echo htmlspecialchars($pkg['duration']); ?> • 
+              <?php echo htmlspecialchars($pkg['gb_amount']); ?> GB
+            </div>
           </div>
           
           <p class="text-muted small"><?php echo htmlspecialchars($pkg['description']); ?></p>

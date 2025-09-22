@@ -2,6 +2,16 @@
 // public/home.php - welcome hero page
 $config = require __DIR__ . '/../config.php';
 $base = rtrim($config['app']['base_url'], '/');
+$pdo = require __DIR__ . '/../db/connection.php';
+require_once __DIR__ . '/../helpers/auth.php';
+if (session_status() !== PHP_SESSION_ACTIVE) session_start();
+$currentUser = current_user();
+try {
+    $stmt = $pdo->query('SELECT COUNT(*) FROM users');
+    $userCount = (int)$stmt->fetchColumn();
+} catch (Exception $e) {
+    $userCount = 0;
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -221,6 +231,20 @@ $base = rtrim($config['app']['base_url'], '/');
         <li class="nav-item"><a class="nav-link" href="<?php echo $base; ?>/services.php">Services</a></li>
         <li class="nav-item"><a class="nav-link" href="<?php echo $base; ?>/about.php">About</a></li>
         <li class="nav-item"><a class="nav-link" href="<?php echo $base; ?>/contact.php">Contact</a></li>
+        <?php if ($currentUser): ?>
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" id="userMenu" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+              <?php echo htmlspecialchars($currentUser['username']); ?>
+            </a>
+            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userMenu">
+              <li><a class="dropdown-item" href="<?php echo $base; ?>/my_orders.php">My Orders</a></li>
+              <li><a class="dropdown-item" href="<?php echo $base; ?>/logout.php">Logout</a></li>
+            </ul>
+          </li>
+        <?php else: ?>
+          <li class="nav-item"><a class="nav-link" href="<?php echo $base; ?>/login.php">Login</a></li>
+          <li class="nav-item"><a class="nav-link" href="<?php echo $base; ?>/register.php">Register</a></li>
+        <?php endif; ?>
       </ul>
     </div>
   </div>
@@ -244,17 +268,32 @@ $base = rtrim($config['app']['base_url'], '/');
       <div class="col-lg-5">
         <div class="quick-links-card">
           <h5 class="mb-3"><i class="fas fa-bolt me-2"></i>Quick Links</h5>
-          <p class="mb-3"><a class="btn btn-primary w-100" href="<?php echo $base; ?>/packages.php">
-            <i class="fas fa-shopping-cart me-2"></i>Order Data
-          </a></p>
-          <p class="mb-0"><a class="btn btn-outline-secondary w-100" href="https://wa.me/<?php echo htmlspecialchars($config['owner']['whatsapp']); ?>">
-            <i class="fab fa-whatsapp me-2"></i>Contact via WhatsApp
-          </a></p>
+            <?php if ($currentUser): ?>
+              <p class="mb-2"><a class="btn btn-primary w-100" href="<?php echo $base; ?>/packages.php">
+                <i class="fas fa-shopping-cart me-2"></i>Order Data
+              </a></p>
+              <p class="mb-2"><a class="btn btn-outline-primary w-100" href="<?php echo $base; ?>/my_orders.php">
+                <i class="fas fa-list me-2"></i>My Orders
+              </a></p>
+              <p class="mb-0"><a class="btn btn-outline-secondary w-100" href="<?php echo $base; ?>/logout.php">
+                <i class="fas fa-sign-out-alt me-2"></i>Logout
+              </a></p>
+            <?php else: ?>
+              <p class="mb-3"><a class="btn btn-primary w-100" href="<?php echo $base; ?>/login.php">
+                <i class="fas fa-sign-in-alt me-2"></i>Login to Order
+              </a></p>
+              <p class="mb-2"><a class="btn btn-outline-primary w-100" href="<?php echo $base; ?>/register.php">
+                <i class="fas fa-user-plus me-2"></i>Create Account
+              </a></p>
+              <p class="mb-0"><a class="btn btn-outline-secondary w-100" href="https://wa.me/<?php echo htmlspecialchars($config['owner']['whatsapp']); ?>">
+                <i class="fab fa-whatsapp me-2"></i>Contact via WhatsApp
+              </a></p>
+            <?php endif; ?>
+          </div>
         </div>
       </div>
     </div>
-  </div>
-</header>
+  </header>
 
 <main class="container py-5">
   <section class="mb-5">

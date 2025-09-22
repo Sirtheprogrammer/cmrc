@@ -6,6 +6,14 @@ require_once __DIR__ . '/../db/connection.php';
 $config = require __DIR__ . '/../config.php';
 $pdo = $GLOBALS['pdo'] ?? $pdo;
 
+// get user count for admin nav
+try {
+    $stmtCount = $pdo->query('SELECT COUNT(*) FROM users');
+    $userCount = (int)$stmtCount->fetchColumn();
+} catch (Exception $e) {
+    $userCount = 0;
+}
+
 // Handle status change
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'update_status') {
     if (!csrf_verify($_POST['_csrf'] ?? '')) { http_response_code(403); echo 'Invalid CSRF'; exit; }
@@ -25,15 +33,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     header('Location: orders.php'); exit;
 }
 
-// Fetch orders with optional search
+// Fetch orders with optional search and optional user filter
 $q = trim($_GET['q'] ?? '');
-$sql = 'SELECT * FROM orders';
+$filterUser = isset($_GET['user_id']) ? (int)$_GET['user_id'] : 0;
 $params = [];
+$sql = "SELECT o.*, u.username AS username FROM orders o LEFT JOIN users u ON o.user_id = u.id";
+$w = [];
 if ($q !== '') {
-    $sql .= ' WHERE phone LIKE :q OR package_name LIKE :q OR status LIKE :q';
+    $w[] = '(o.phone LIKE :q OR o.package_name LIKE :q OR o.status LIKE :q OR u.username LIKE :q)';
     $params[':q'] = '%' . $q . '%';
 }
-$sql .= ' ORDER BY created_at DESC LIMIT 200';
+if ($filterUser > 0) {
+    $w[] = 'o.user_id = :uid';
+    $params[':uid'] = $filterUser;
+}
+if ($w) $sql .= ' WHERE ' . implode(' AND ', $w);
+$sql .= ' ORDER BY o.created_at DESC LIMIT 200';
 $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
 $orders = $stmt->fetchAll();
@@ -53,6 +68,7 @@ $orders = $stmt->fetchAll();
     <a class="navbar-brand" href="#">Admin Panel</a>
     <div>
       <a href="packages.php" class="btn btn-outline-light btn-sm me-2">Manage Packages</a>
+      <a href="users.php" class="btn btn-outline-light btn-sm me-2">Users <span class="badge bg-light text-dark"><?php echo (int)$userCount; ?></span></a>
       <a href="logout.php" class="btn btn-outline-light btn-sm">Logout</a>
     </div>
   </div>
@@ -66,11 +82,12 @@ $orders = $stmt->fetchAll();
 
   <div class="table-responsive">
     <table class="table table-striped table-hover">
-      <thead><tr><th>#</th><th>Package</th><th>Phone</th><th>Network</th><th>Amount</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
+      <thead><tr><th>#</th><th>User</th><th>Package</th><th>Phone</th><th>Network</th><th>Amount</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
       <tbody>
         <?php foreach ($orders as $o): ?>
           <tr>
             <td><?php echo (int)$o['id']; ?></td>
+            <td><?php echo htmlspecialchars($o['username'] ?? 'Guest'); ?></td>
             <td><?php echo htmlspecialchars($o['package_name']); ?></td>
             <td><?php echo htmlspecialchars($o['phone']); ?></td>
             <td><?php echo htmlspecialchars($o['network']); ?></td>

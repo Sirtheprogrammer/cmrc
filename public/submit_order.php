@@ -84,6 +84,24 @@ $stmt->execute([
     ':status' => 'awaiting_confirmation',
 ]);
 
+// attach user_id if a user is logged in
+if (session_status() !== PHP_SESSION_ACTIVE) session_start();
+require_once __DIR__ . '/../helpers/auth.php';
+$currentUser = current_user();
+if ($currentUser) {
+    // attempt to get the last insert id and update the order
+    try {
+        $orderId = (int)$pdo->lastInsertId();
+        if ($orderId) {
+            $stmt = $pdo->prepare('UPDATE orders SET user_id = :uid WHERE id = :id');
+            $stmt->execute([':uid' => $currentUser['id'], ':id' => $orderId]);
+        }
+    } catch (Exception $e) {
+        // non-fatal: do not break the submission flow if this update fails
+        error_log('Failed to attach user_id to order: ' . $e->getMessage());
+    }
+}
+
 $orderId = $pdo->lastInsertId();
 
 // build whatsapp message and redirect

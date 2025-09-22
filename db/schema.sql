@@ -12,9 +12,21 @@ CREATE TABLE IF NOT EXISTS packages (
   gb_amount DECIMAL(6,2) NOT NULL,
   price DECIMAL(10,2) NOT NULL,
   description TEXT DEFAULT NULL,
+  network ENUM('tigo','vodacom','halotel','airtel') NOT NULL,
   allow_custom_gb TINYINT(1) NOT NULL DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Users table for customers (create before orders so FK references work)
+CREATE TABLE IF NOT EXISTS `users` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `username` VARCHAR(100) NOT NULL UNIQUE,
+  `password_hash` VARCHAR(255) NOT NULL,
+  `phone` VARCHAR(32) DEFAULT NULL,
+  `email` VARCHAR(255) DEFAULT NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Orders
 CREATE TABLE IF NOT EXISTS orders (
@@ -31,7 +43,9 @@ CREATE TABLE IF NOT EXISTS orders (
   notes TEXT DEFAULT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NULL DEFAULT NULL,
-  FOREIGN KEY (package_id) REFERENCES packages(id) ON DELETE SET NULL
+  user_id INT UNSIGNED DEFAULT NULL, -- nullable user_id column
+  FOREIGN KEY (package_id) REFERENCES packages(id) ON DELETE SET NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Admins
@@ -53,9 +67,9 @@ CREATE TABLE IF NOT EXISTS uploads (
   FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Seed sample packages
-INSERT INTO packages (name, duration, gb_amount, price, description, allow_custom_gb) VALUES
-('Starter - 3 weeks', '3_weeks', 2, 1000.00, '2GB, valid 3 weeks', 0),
-('Basic - 1 month', '1_month', 5, 2000.00, '5GB, valid 1 month', 0),
-('Standard - 6 months', '6_months', 30, 9000.00, '30GB, valid 6 months', 0),
+INSERT INTO packages (name, duration, gb_amount, price, description, network, allow_custom_gb) VALUES
+('Starter - 3 weeks Tigo', '3_weeks', 2, 1000.00, '2GB, valid 3 weeks', 'tigo', 0),
+('Basic - 1 month Vodacom', '1_month', 5, 2000.00, '5GB, valid 1 month', 'vodacom', 0),
+('Standard - 6 months Halotel', '6_months', 30, 9000.00, '30GB, valid 6 months', 'halotel', 0),
+('Pro - 12 months Airtel', '12_months', 60, 16000.00, '60GB, valid 12 months', 'airtel', 0);,
 ('Pro - 12 months', '12_months', 60, 16000.00, '60GB, valid 12 months', 0);

@@ -187,6 +187,25 @@ $packages = $pdo->query('SELECT * FROM packages ORDER BY price ASC')->fetchAll()
     }
     
     /* Mobile responsiveness */
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .fade-in {
+        animation: fadeIn 0.3s ease-in-out forwards;
+    }
+
+    .network-badge {
+        display: inline-block;
+        padding: 0.2rem 0.5rem;
+        border-radius: 50px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        background: var(--primary);
+        color: white;
+    }
+
     @media (max-width: 768px) {
         .package-card {
             padding: 1.25rem;
@@ -245,9 +264,9 @@ $packages = $pdo->query('SELECT * FROM packages ORDER BY price ASC')->fetchAll()
             <h5 class="card-title mb-2"><?php echo htmlspecialchars($pkg['name']); ?></h5>
             <div class="package-price">Tsh <?php echo number_format($pkg['price'],0); ?></div>
             <div class="text-muted small">
-              <?php echo ucfirst(htmlspecialchars($pkg['network'])); ?> • 
               <?php echo htmlspecialchars($pkg['duration']); ?> • 
-              <?php echo htmlspecialchars($pkg['gb_amount']); ?> GB
+              <?php echo htmlspecialchars($pkg['gb_amount']); ?> GB • 
+              <span class="network-badge"><?php echo ucfirst(htmlspecialchars($pkg['network'])); ?></span>
             </div>
           </div>
           
@@ -322,9 +341,10 @@ $packages = $pdo->query('SELECT * FROM packages ORDER BY price ASC')->fetchAll()
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-  // Simple filter functionality
+  // Network filter functionality
   document.addEventListener('DOMContentLoaded', function() {
     const filterButtons = document.querySelectorAll('.filter-btn');
+    const packageCards = document.querySelectorAll('.package-card');
     
     filterButtons.forEach(button => {
       button.addEventListener('click', function() {
@@ -338,8 +358,22 @@ $packages = $pdo->query('SELECT * FROM packages ORDER BY price ASC')->fetchAll()
         this.classList.remove('btn-outline-primary');
         this.classList.add('btn-primary');
         
-        // In a real implementation, you would filter packages here
-        // This is just a visual demonstration
+        const selectedNetwork = this.textContent.trim().toLowerCase();
+        
+        // Show/hide packages based on network
+        packageCards.forEach(card => {
+          const parent = card.closest('.col');
+          const networkBadge = card.querySelector('.network-badge');
+          const cardNetwork = networkBadge ? networkBadge.textContent.trim().toLowerCase() : '';
+          
+          if (selectedNetwork === 'all networks' || cardNetwork === selectedNetwork) {
+            parent.style.display = '';
+            parent.classList.add('fade-in');
+          } else {
+            parent.style.display = 'none';
+            parent.classList.remove('fade-in');
+          }
+        });
       });
     });
   });

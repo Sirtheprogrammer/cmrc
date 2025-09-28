@@ -1,132 +1,141 @@
 <?php
-// helpers/auth.php - simple admin auth helpers
-if (session_status() === PHP_SESSION_NONE) session_start();
-require_once __DIR__ . '/csrf.php';
-// NOTE: db connection should be required by callers to allow graceful error handling
-
-function admin_login(string $username, string $password): bool {
-    $pdo = $GLOBALS['pdo'] ?? $pdo;
-    $stmt = $pdo->prepare('SELECT * FROM admins WHERE username = ? LIMIT 1');
-    $stmt->execute([$username]);
-    $admin = $stmt->fetch();
-    if (!$admin) return false;
-    if (password_verify($password, $admin['password_hash'])) {
-        // store minimal session
-        $_SESSION['admin'] = [
-            'id' => $admin['id'],
-            'username' => $admin['username'],
-            'name' => $admin['name'] ?? null,
-        ];
-        return true;
-    }
-    return false;
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
 }
 
-function admin_logout(): void {
-    if (session_status() === PHP_SESSION_NONE) session_start();
-    unset($_SESSION['admin']);
+function is_logged_in() {
+    return isset($_SESSION['user_id']);
 }
 
-function is_admin_logged_in(): bool {
-    if (session_status() === PHP_SESSION_NONE) session_start();
-    return !empty($_SESSION['admin']);
+function is_admin() {
+    return isset($_SESSION['admin_id']);
 }
 
-function require_admin(): void {
-    if (!is_admin_logged_in()) {
+function require_admin() {
+    if (!is_admin()) {
         header('Location: /lupyanatech/admin/login.php');
         exit;
     }
 }
 
-function current_admin() {
-    if (session_status() === PHP_SESSION_NONE) session_start();
-    return $_SESSION['admin'] ?? null;
+function get_user_id() {
+    return $_SESSION['user_id'] ?? null;
 }
 
-// ---------------------
-// Customer (user) auth helpers
-// ---------------------
+function get_admin_id() {
+    return $_SESSION['admin_id'] ?? null;
+}
 
-function user_register(PDO $pdo, string $username, string $password, ?string $phone = null, ?string $email = null): array
-{
-    $username = trim($username);
-    if ($username === '' || $password === '') {
-        throw new InvalidArgumentException('Username and password are required');
+function get_username() {
+    return $_SESSION['username'] ?? null;
+}
+
+function get_admin_username() {
+    return $_SESSION['admin_username'] ?? null;
+}
+
+// Compatibility: return current logged-in user info (legacy helper)
+function current_user() {
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
     }
 
-    // check for existing username
-    $stmt = $pdo->prepare('SELECT id FROM users WHERE username = :u LIMIT 1');
-    $stmt->execute([':u' => $username]);
-    if ($stmt->fetch()) {
-        throw new RuntimeException('Username already taken');
+    if (!isset($_SESSION['user_id'])) {
+        return null;
     }
 
-    $hash = password_hash($password, PASSWORD_DEFAULT);
-    $stmt = $pdo->prepare('INSERT INTO users (username, password_hash, phone, email) VALUES (:u, :p, :ph, :e)');
-    $stmt->execute([
-        ':u' => $username,
-        ':p' => $hash,
-        ':ph' => $phone,
-        ':e' => $email
-    ]);
-
-    $id = (int)$pdo->lastInsertId();
     return [
-        'id' => $id,
-        'username' => $username,
-        'phone' => $phone,
-        'email' => $email
+        'id' => $_SESSION['user_id'],
+        'username' => $_SESSION['username'] ?? null,
+        'name' => $_SESSION['name'] ?? null,
+        'email' => $_SESSION['email'] ?? null,
     ];
 }
 
-function user_login(PDO $pdo, string $username, string $password): array
-{
-    $stmt = $pdo->prepare('SELECT * FROM users WHERE username = :u LIMIT 1');
-    $stmt->execute([':u' => $username]);
-    $user = $stmt->fetch(PDO::FETCH_ASSOC);
-    if (!$user) {
-        throw new RuntimeException('Invalid username or password');
-    }
-    if (!password_verify($password, $user['password_hash'])) {
-        throw new RuntimeException('Invalid username or password');
+// Optional helper to set current user data into the session
+function set_current_user(array $user) {
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
     }
 
-    if (session_status() !== PHP_SESSION_ACTIVE) session_start();
-    // Store minimal user data in session
-    $_SESSION['user'] = [
-        'id' => (int)$user['id'],
-        'username' => $user['username'],
-        'phone' => $user['phone'] ?? null,
-        'email' => $user['email'] ?? null
-    ];
-
-    return $_SESSION['user'];
+    if (isset($user['id'])) {
+        $_SESSION['user_id'] = $user['id'];
+    }
+    if (isset($user['username'])) {
+        $_SESSION['username'] = $user['username'];
+    }
+    if (isset($user['name'])) {
+        $_SESSION['name'] = $user['name'];
+    }
+    if (isset($user['email'])) {
+        $_SESSION['email'] = $user['email'];
+    }
 }
 
-function user_logout(): void
-{
-    if (session_status() !== PHP_SESSION_ACTIVE) session_start();
-    unset($_SESSION['user']);
+// Initialize admin if not exists
+function ensure_admin_exists($pdo) {
+    try {
+        $stmt = $pdo->query('SELECT COUNT(*) FROM admins');
+        $count = $stmt->fetchColumn();
+        
+        if ($count == 0) {
+            $stmt = $pdo->prepare('INSERT INTO admins (username, password_hash, name) VALUES (?, ?, ?)');
+            $stmt->execute([
+                'admin',
+                password_hash('admin123', PASSWORD_DEFAULT),
+                'Administrator'
+            ]);
+        }
+    } catch (PDOException $e) {
+        error_log("Error creating admin: " . $e->getMessage());
+    }
 }
 
-function is_user_logged_in(): bool
-{
-    if (session_status() !== PHP_SESSION_ACTIVE) session_start();
-    return !empty($_SESSION['user']);
-}
+// Authenticate a user by username and password. Returns true on success, false on failure.
+function user_login(string $username, string $password): bool {
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
 
-function current_user(): ?array
-{
-    if (session_status() !== PHP_SESSION_ACTIVE) session_start();
-    return $_SESSION['user'] ?? null;
-}
+    // normalize inputs
+    $username = trim($username);
 
-function require_user_login(): void
-{
-    if (!is_user_logged_in()) {
-        $base = rtrim((require __DIR__ . '/../config.php')['app']['base_url'], '/');
-        header('Location: ' . $base . '/login.php');
-        exit;
+    if ($username === '' || $password === '') {
+        return false;
+    }
+
+    // obtain a PDO connection from the DB helper
+    $dbFile = __DIR__ . '/../db/connection.php';
+    if (!file_exists($dbFile)) {
+        error_log('Database connection file not found: ' . $dbFile);
+        return false;
+    }
+
+    try {
+        $pdo = require $dbFile; // connection.php returns the PDO instance
+    } catch (Throwable $e) {
+        error_log('Failed to get DB connection in user_login: ' . $e->getMessage());
+        return false;
+    }
+
+    try {
+        $stmt = $pdo->prepare('SELECT id, username, password_hash, email FROM users WHERE username = ? LIMIT 1');
+        $stmt->execute([$username]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($user && isset($user['password_hash']) && password_verify($password, $user['password_hash'])) {
+            // Set session values
+            $_SESSION['user_id'] = (int)$user['id'];
+            $_SESSION['username'] = $user['username'];
+            if (isset($user['email'])) {
+                $_SESSION['email'] = $user['email'];
+            }
+            return true;
+        }
+
+        return false;
+    } catch (Throwable $e) {
+        error_log('Error during user_login: ' . $e->getMessage());
+        return false;
     }
 }

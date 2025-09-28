@@ -1,10 +1,15 @@
 <?php
-// admin/packages.php - manage packages (list, create, edit, delete)
 require_once __DIR__ . '/../helpers/auth.php';
-require_admin();
 require_once __DIR__ . '/../db/connection.php';
 require_once __DIR__ . '/../helpers/csrf.php';
-$pdo = $GLOBALS['pdo'] ?? $pdo;
+
+session_start();
+
+// Ensure database connection is available
+$pdo = require __DIR__ . '/../db/connection.php';
+
+// Include header (which includes require_admin())
+require_once __DIR__ . '/includes/header.php';
 
 // handle create/edit
 $errors = [];
@@ -48,24 +53,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // fetch packages
 $rows = $pdo->query('SELECT * FROM packages ORDER BY price ASC')->fetchAll();
 ?>
-<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Admin — Packages</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
-<body>
-<nav class="navbar navbar-dark bg-dark">
-  <div class="container-fluid">
-    <a class="navbar-brand" href="#">Admin Panel</a>
-    <div>
-      <a href="orders.php" class="btn btn-outline-light btn-sm me-2">Orders</a>
-      <a href="logout.php" class="btn btn-outline-light btn-sm">Logout</a>
-    </div>
-  </div>
-</nav>
+<?php require_once __DIR__ . '/includes/header.php'; ?>
 <div class="container py-4">
   <h3>Packages</h3>
   <?php if ($errors): ?>
@@ -157,5 +145,4 @@ $rows = $pdo->query('SELECT * FROM packages ORDER BY price ASC')->fetchAll();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 </script>
-</body>
-</html>
+<?php require_once __DIR__ . '/includes/footer.php'; ?>

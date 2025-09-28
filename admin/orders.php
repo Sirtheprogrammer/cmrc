@@ -1,125 +1,154 @@
 <?php
-// admin/orders.php - list and manage orders
+session_start();
+
 require_once __DIR__ . '/../helpers/auth.php';
-require_admin();
-require_once __DIR__ . '/../db/connection.php';
-$config = require __DIR__ . '/../config.php';
-$pdo = $GLOBALS['pdo'] ?? $pdo;
+require_once __DIR__ . '/../helpers/csrf.php';
 
-// get user count for admin nav
-try {
-    $stmtCount = $pdo->query('SELECT COUNT(*) FROM users');
-    $userCount = (int)$stmtCount->fetchColumn();
-} catch (Exception $e) {
-    $userCount = 0;
-}
+// Get database connection
+$pdo = require __DIR__ . '/../db/connection.php';
 
-// Handle status change
+// Include header (which includes require_admin())
+require_once __DIR__ . '/includes/header.php';
+
+// Handle status updates
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'update_status') {
-    if (!csrf_verify($_POST['_csrf'] ?? '')) { http_response_code(403); echo 'Invalid CSRF'; exit; }
-    $orderId = (int)($_POST['order_id'] ?? 0);
-    $status = $_POST['status'] ?? 'pending';
-    $stmt = $pdo->prepare('UPDATE orders SET status = ?, updated_at = NOW() WHERE id = ?');
-    $stmt->execute([$status, $orderId]);
-    header('Location: orders.php'); exit;
+    if (csrf_verify($_POST['_csrf'] ?? '')) {
+        $order_id = (int)($_POST['order_id'] ?? 0);
+        $status = $_POST['status'] ?? '';
+        $notes = trim($_POST['notes'] ?? '');
+        
+        if ($order_id > 0) {
+            $stmt = $pdo->prepare('UPDATE orders SET status = ?, notes = ?, updated_at = NOW() WHERE id = ?');
+            $stmt->execute([$status, $notes, $order_id]);
+            header('Location: orders.php?updated=1');
+            exit;
+        }
+    }
 }
 
-// Delete order
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'delete_order') {
-    if (!csrf_verify($_POST['_csrf'] ?? '')) { http_response_code(403); echo 'Invalid CSRF'; exit; }
-    $orderId = (int)($_POST['order_id'] ?? 0);
-    $stmt = $pdo->prepare('DELETE FROM orders WHERE id = ?');
-    $stmt->execute([$orderId]);
-    header('Location: orders.php'); exit;
-}
-
-// Fetch orders with optional search and optional user filter
-$q = trim($_GET['q'] ?? '');
-$filterUser = isset($_GET['user_id']) ? (int)$_GET['user_id'] : 0;
-$params = [];
-$sql = "SELECT o.*, u.username AS username FROM orders o LEFT JOIN users u ON o.user_id = u.id";
-$w = [];
-if ($q !== '') {
-    $w[] = '(o.phone LIKE :q OR o.package_name LIKE :q OR o.status LIKE :q OR u.username LIKE :q)';
-    $params[':q'] = '%' . $q . '%';
-}
-if ($filterUser > 0) {
-    $w[] = 'o.user_id = :uid';
-    $params[':uid'] = $filterUser;
-}
-if ($w) $sql .= ' WHERE ' . implode(' AND ', $w);
-$sql .= ' ORDER BY o.created_at DESC LIMIT 200';
-$stmt = $pdo->prepare($sql);
-$stmt->execute($params);
+// Get orders with user info
+$stmt = $pdo->query('
+    SELECT o.*, u.username as customer_name, p.name as package_name 
+    FROM orders o 
+    LEFT JOIN users u ON o.user_id = u.id 
+    LEFT JOIN packages p ON o.package_id = p.id 
+    ORDER BY o.created_at DESC
+');
 $orders = $stmt->fetchAll();
-
 ?>
-<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Admin — Orders</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
-<body>
-<nav class="navbar navbar-dark bg-dark">
-  <div class="container-fluid">
-    <a class="navbar-brand" href="#">Admin Panel</a>
-    <div>
-      <a href="packages.php" class="btn btn-outline-light btn-sm me-2">Manage Packages</a>
-      <a href="users.php" class="btn btn-outline-light btn-sm me-2">Users <span class="badge bg-light text-dark"><?php echo (int)$userCount; ?></span></a>
-      <a href="logout.php" class="btn btn-outline-light btn-sm">Logout</a>
-    </div>
-  </div>
-</nav>
-<div class="container py-4">
-  <h3>Orders</h3>
-  <form class="row g-2 mb-3" method="get">
-    <div class="col-auto"><input name="q" value="<?php echo htmlspecialchars($q); ?>" class="form-control" placeholder="Search by phone, package, status"></div>
-    <div class="col-auto"><button class="btn btn-primary">Search</button></div>
-  </form>
 
-  <div class="table-responsive">
-    <table class="table table-striped table-hover">
-      <thead><tr><th>#</th><th>User</th><th>Package</th><th>Phone</th><th>Network</th><th>Amount</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
-      <tbody>
-        <?php foreach ($orders as $o): ?>
-          <tr>
-            <td><?php echo (int)$o['id']; ?></td>
-            <td><?php echo htmlspecialchars($o['username'] ?? 'Guest'); ?></td>
-            <td><?php echo htmlspecialchars($o['package_name']); ?></td>
-            <td><?php echo htmlspecialchars($o['phone']); ?></td>
-            <td><?php echo htmlspecialchars($o['network']); ?></td>
-            <td><?php echo htmlspecialchars($o['amount_paid'] ?? ''); ?></td>
-            <td><?php echo htmlspecialchars($o['status']); ?></td>
-            <td><?php echo htmlspecialchars($o['created_at']); ?></td>
-            <td>
-              <a href="order_view.php?id=<?php echo (int)$o['id']; ?>" class="btn btn-sm btn-outline-primary">View</a>
-              <form method="post" style="display:inline-block" onsubmit="return confirm('Change status?')">
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h5 class="mb-0">Manage Orders</h5>
+    </div>
+
+    <?php if (isset($_GET['updated'])): ?>
+        <div class="alert alert-success">Order status updated successfully.</div>
+    <?php endif; ?>
+
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Customer</th>
+                            <th>Package</th>
+                            <th>Amount</th>
+                            <th>Network</th>
+                            <th>Phone</th>
+                            <th>Status</th>
+                            <th>Date</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($orders as $order): ?>
+                            <tr>
+                                <td>#<?php echo $order['id']; ?></td>
+                                <td><?php echo htmlspecialchars($order['customer_name'] ?? 'Guest'); ?></td>
+                                <td><?php echo htmlspecialchars($order['package_name']); ?></td>
+                                <td>Tsh <?php echo number_format($order['amount_paid'],0); ?></td>
+                                <td><?php echo htmlspecialchars($order['network']); ?></td>
+                                <td><?php echo htmlspecialchars($order['phone']); ?></td>
+                                <td>
+                                    <span class="badge bg-<?php
+                                        echo match($order['status']) {
+                                            'pending' => 'warning',
+                                            'awaiting_confirmation' => 'info',
+                                            'confirmed' => 'primary',
+                                            'delivered' => 'success',
+                                            'cancelled' => 'danger',
+                                            default => 'secondary'
+                                        };
+                                    ?>">
+                                        <?php echo ucfirst($order['status']); ?>
+                                    </span>
+                                </td>
+                                <td><?php echo date('M j, Y', strtotime($order['created_at'])); ?></td>
+                                <td>
+                                    <button type="button" class="btn btn-sm btn-primary" 
+                                            onclick="viewOrder(<?php echo htmlspecialchars(json_encode($order), ENT_QUOTES, 'UTF-8'); ?>)">
+                                        Update Status
+                                    </button>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Status Update Modal -->
+<div class="modal fade" id="updateModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Update Order Status</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post">
                 <?php echo csrf_field(); ?>
                 <input type="hidden" name="action" value="update_status">
-                <input type="hidden" name="order_id" value="<?php echo (int)$o['id']; ?>">
-                <select name="status" class="form-select form-select-sm d-inline-block" style="width:140px;">
-                  <?php foreach (['pending','awaiting_confirmation','confirmed','delivered','cancelled'] as $st): ?>
-                    <option value="<?php echo $st; ?>" <?php if ($st === $o['status']) echo 'selected'; ?>><?php echo $st; ?></option>
-                  <?php endforeach; ?>
-                </select>
-                <button class="btn btn-sm btn-primary">Save</button>
-              </form>
-
-              <form method="post" style="display:inline-block" onsubmit="return confirm('Delete order?')">
-                <?php echo csrf_field(); ?>
-                <input type="hidden" name="action" value="delete_order">
-                <input type="hidden" name="order_id" value="<?php echo (int)$o['id']; ?>">
-                <button class="btn btn-sm btn-danger">Delete</button>
-              </form>
-            </td>
-          </tr>
-        <?php endforeach; ?>
-      </tbody>
-    </table>
-  </div>
+                <input type="hidden" name="order_id" id="modal_order_id">
+                
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Status</label>
+                        <select name="status" class="form-select" required>
+                            <option value="pending">Pending</option>
+                            <option value="awaiting_confirmation">Awaiting Confirmation</option>
+                            <option value="confirmed">Confirmed</option>
+                            <option value="delivered">Delivered</option>
+                            <option value="cancelled">Cancelled</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Notes</label>
+                        <textarea name="notes" class="form-control" rows="3"></textarea>
+                    </div>
+                </div>
+                
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="submit" class="btn btn-primary">Update Status</button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
-</body>
-</html>
+
+<script>
+function viewOrder(order) {
+    document.getElementById('modal_order_id').value = order.id;
+    document.querySelector('select[name="status"]').value = order.status;
+    document.querySelector('textarea[name="notes"]').value = order.notes || '';
+    
+    new bootstrap.Modal(document.getElementById('updateModal')).show();
+}
+</script>
+
+<?php require_once __DIR__ . '/includes/footer.php'; ?>

@@ -1,26 +1,35 @@
 <?php
-// db/connection.php - PDO connection helper
-$config = require __DIR__ . '/../config.php';
-$db = $config['db'];
+if (!function_exists('get_db_connection')) {
+    function get_db_connection() {
+        static $pdo = null;
+        
+        if ($pdo !== null) {
+            return $pdo;
+        }
 
-$dsn = sprintf('mysql:host=%s;port=%d;dbname=%s;charset=%s', $db['host'], $db['port'], $db['name'], $db['charset']);
+        $config = require __DIR__ . '/../config.php';
 
-try {
-    $pdo = new PDO($dsn, $db['user'], $db['pass'], [
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        PDO::ATTR_EMULATE_PREPARES => false,
-    ]);
-} catch (PDOException $e) {
-    // throw so caller can handle and present friendly error
-    throw new RuntimeException('Database connection failed: ' . $e->getMessage());
+        try {
+            $pdo = new PDO(
+                "mysql:host={$config['db']['host']};dbname={$config['db']['database']};charset=utf8mb4",
+                $config['db']['username'],
+                $config['db']['password'],
+                [
+                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                    PDO::ATTR_EMULATE_PREPARES => false,
+                ]
+            );
+            
+            return $pdo;
+        } catch (PDOException $e) {
+            error_log("Database connection failed: " . $e->getMessage());
+            if (strpos($e->getMessage(), "Unknown database") !== false) {
+                die("Database does not exist. Please run the schema.sql file first.");
+            }
+            die("Could not connect to the database. Please check your configuration.");
+        }
+    }
 }
 
-// helper to prepare and execute with params and return stmt
-function db_query(PDO $pdo, string $sql, array $params = []) {
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute($params);
-    return $stmt;
-}
-
-return $pdo;
+return get_db_connection();

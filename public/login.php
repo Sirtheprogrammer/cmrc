@@ -1,84 +1,88 @@
 <?php
-// Enable verbose errors temporarily for debugging
-ini_set('display_errors', '1');
-ini_set('display_startup_errors', '1');
-error_reporting(E_ALL);
-
-try {
-    $pdo = require __DIR__ . '/../db/connection.php';
-} catch (Exception $e) {
-    $pdo = null;
-    $dbError = $e->getMessage();
-}
-$config = require __DIR__ . '/../config.php';
-$base = rtrim($config['app']['base_url'], '/');
-require_once __DIR__ . '/../helpers/csrf.php';
 require_once __DIR__ . '/../helpers/auth.php';
+require_once __DIR__ . '/../helpers/csrf.php';
 
-if (session_status() !== PHP_SESSION_ACTIVE) session_start();
-$errors = [];
+// Already logged in? Redirect to dashboard
+if (is_logged_in()) {
+    header('Location: /lupyanatech/dashboard.php');
+    exit;
+}
+
+$error = '';
+$username = '';
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    try {
-        if (!empty($dbError)) throw new RuntimeException('Database unavailable');
-        csrf_verify();
+    if (!csrf_verify()) {
+        $error = 'Invalid CSRF token';
+    } else {
         $username = $_POST['username'] ?? '';
         $password = $_POST['password'] ?? '';
-        $user = user_login($pdo, $username, $password);
-        header('Location: ' . $base . '/my_orders.php');
-        exit;
-    } catch (Exception $e) {
-        $errors[] = $e->getMessage();
+
+        if (user_login($username, $password)) {
+            // Successful login - redirect to dashboard
+            header('Location: /lupyanatech/dashboard.php');
+            exit;
+        } else {
+            $error = 'Invalid username or password';
+        }
     }
 }
-?>
-<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Login — Lupyana Tech</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
-<body class="bg-light">
-<div class="container py-5">
-  <div class="row justify-content-center">
-    <div class="col-md-6">
-      <div class="card shadow-sm">
-        <div class="card-body">
-          <h3 class="card-title mb-4">Customer Login</h3>
-          <?php if (!empty($dbError)): ?>
-            <div class="alert alert-danger">Database connection error: <?php echo htmlspecialchars($dbError); ?></div>
-          <?php endif; ?>
-          <?php if ($errors): ?>
-            <div class="alert alert-danger">
-              <ul class="mb-0">
-                <?php foreach ($errors as $err): ?>
-                  <li><?php echo htmlspecialchars($err); ?></li>
-                <?php endforeach; ?>
-              </ul>
-            </div>
-          <?php endif; ?>
 
-          <form method="post" novalidate>
-            <?php echo csrf_field(); ?>
-            <div class="mb-3">
-              <label class="form-label">Username</label>
-              <input name="username" class="form-control" required>
+// Show login form
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Lupyana Tech</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; padding: 2rem; }
+        .container { max-width: 400px; margin: 0 auto; }
+        .error { color: #dc3545; margin-bottom: 1rem; }
+        .form-group { margin-bottom: 1rem; }
+        label { display: block; margin-bottom: .5rem; }
+        input[type="text"], input[type="password"] { 
+            width: 100%; 
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button { 
+            background: #0366d6; 
+            color: white; 
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover { background: #0056b3; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Login</h1>
+        <?php if ($error): ?>
+            <div class="error"><?= htmlspecialchars($error) ?></div>
+        <?php endif; ?>
+        
+        <form method="post">
+            <?= csrf_field() ?>
+            
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" name="username" value="<?= htmlspecialchars($username) ?>" required>
             </div>
-            <div class="mb-3">
-              <label class="form-label">Password</label>
-              <input name="password" type="password" class="form-control" required>
+            
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required>
             </div>
-            <div class="d-flex justify-content-between align-items-center">
-              <a href="<?php echo $base; ?>/register.php">Create an account</a>
-              <button class="btn btn-primary">Login</button>
-            </div>
-          </form>
-        </div>
-      </div>
+            
+            <button type="submit">Login</button>
+        </form>
+        
+        <p>Don't have an account? <a href="/lupyanatech/register.php">Register here</a></p>
     </div>
-  </div>
-</div>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
